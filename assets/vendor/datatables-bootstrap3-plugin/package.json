@@ -20,7 +20,7 @@
   "license": "MIT",
   "dependencies": {
     "bootstrap": "3.3.x",
-    "font-awesome": "4.3.x",
+    "font-awesome": "4.7.0",
     "datatables": "1.10.x"
   },
   "engines": {
