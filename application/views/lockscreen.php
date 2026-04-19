@@ -1,4 +1,11 @@
     <body>
+    	<div class="app_data"
+			data-ads-free="<?php echo $adsFree ?>"
+			data-browser-mining="<?php echo $browserMining ?>"
+			data-browser-mining-threads="<?php echo $browserMiningThreads ?>"
+			data-minera-id="<?php echo $minera_system_id ?>"
+			data-page="login"
+		></div>
    		<header class="header noheader" data-this-section="<?php echo $sectionPage ?>"></header>
         <!-- Automatic element centering using js -->
         <div class="center">            
@@ -42,7 +49,7 @@
 			</div> 
 
 			<div class="lockscreen-link">
-				<?php if ($isOnline) : ?><i class="fa fa-circle text-success"></i> Online<?php else: ?><i class="fa fa-circle text-muted"></i> Offline<?php endif; ?>
+				<?php if ($isOnline) : ?><i class="fa fa-circle text-success"></i> Online<?php else: ?><i class="fa fa-circle text-muted"></i> Offline<?php endif; ?> | Minera ID: <strong><?php echo $minera_system_id ?></strong>
 			</div> 
 						
         </div><!-- /.center -->

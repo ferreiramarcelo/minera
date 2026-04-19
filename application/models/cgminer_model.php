@@ -65,30 +65,30 @@ class Cgminer_model extends CI_Model {
 		if ($network) list($ip, $port) = explode(":", $network);
 
 		$socket = $this->getsock($ip, $port);
-		if ($socket != null)
-		{
+		if ($socket != null) {
 			socket_write($socket, $cmd, strlen($cmd));
 			$line = $this->readsockline($socket);
 			socket_close($socket);
 
-			if (strlen($line) == 0)
-			{
+			if (strlen($line) == 0) {
 				$msg = "WARN: '$cmd' returned nothing\n";
 				return array("error" => true, "msg" => $msg);
 			}
-		
+
+			// Antminer JSON bug fix
+			$line = str_replace('}{', '},{' ,str_replace("\0", '', $line));
+
 			//print "$cmd returned '$line'\n";
-		
-			if (substr($line,0,1) == '{')
+			if (substr($line,0,1) == '{') {
+				// log_message("error", var_export($line, true));
 				return json_decode($line);
+			}
 			
 			$data = array();
 			
 			$objs = explode('|', $line);
-			foreach ($objs as $obj)
-			{
-				if (strlen($obj) > 0)
-				{
+			foreach ($objs as $obj) {
+				if (strlen($obj) > 0) {
 					$items = explode(',', $obj);
 					$item = $items[0];
 					$id = explode('=', $items[0], 2);
@@ -100,8 +100,7 @@ class Cgminer_model extends CI_Model {
 					if (strlen($name) == 0)
 						$name = 'null';
 			
-					if (isset($data[$name]))
-					{
+					if (isset($data[$name])) {
 						$num = 1;
 						while (isset($data[$name.$num]))
 							$num++;
@@ -109,8 +108,7 @@ class Cgminer_model extends CI_Model {
 					}
 			
 					$counter = 0;
-					foreach ($items as $item)
-					{
+					foreach ($items as $item) {
 						$id = explode('=', $item, 2);
 						if (count($id) == 2)
 							$data[$name][$id[0]] = $id[1];
@@ -132,24 +130,21 @@ class Cgminer_model extends CI_Model {
 		return array("error" => true, "msg" => "Miner error");
 	}
 	
-	public function selectPool($poolId, $network)
-	{
+	public function selectPool($poolId, $network) {
 		log_message("error", "Trying to switch pool ".(int)$poolId." to the main one. (".$network.")");
 		$o = $this->callMinerd('{"command":"switchpool", "parameter":'.(int)$poolId.'}', $network);
 		log_message("error", var_export($o, true));
 		return $o;
 	}
 	
-	public function addPool($url, $user, $pass, $network)
-	{
+	public function addPool($url, $user, $pass, $network) {
 		log_message("error", "Trying to add pool parameter:".$url.",".$user.",".$pass." (".$network.")");
 		$o = $this->callMinerd('{"command":"addpool", "parameter":"'.$url.','.$user.','.$pass.'"}', $network);
 		log_message("error", var_export($o, true));
 		return $o;
 	}
 	
-	public function removePool($poolId, $network)
-	{
+	public function removePool($poolId, $network) {
 		log_message("error", "Trying to remove pool ".(int)$poolId." (".$network.")");
 		$o = $this->callMinerd('{"command":"removepool", "parameter":'.(int)$poolId.'}', $network);
 		log_message("error", var_export($o, true));

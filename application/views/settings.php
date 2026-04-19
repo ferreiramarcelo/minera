@@ -144,6 +144,11 @@
 								    		<?php endif; ?>
 								    	</div>										
 								    </div>
+								    <?php if (!$adsFree) : ?>
+									<div class="box-footer text-center" style="clear:both">
+										<?php echo $ads['234x60'] ?>
+								    </div>
+								    <?php endif; ?>
 								</div>
                         
 							</section><!-- End left section -->
@@ -154,23 +159,22 @@
 								<div class="box bg-light box-danger" id="box-donation">
 									<div class="box-header">
 										<!-- tools box -->
-										<i class="fa fa-gift"></i>
+										<i class="fa fa-shopping-cart"></i>
 			
-										<h3 class="box-title">Donations</h3>
+										<h3 class="box-title">Remove Ads</h3>
 									</div>
 									<div class="box-body text-center">
 										<?php if (!$adsFree) : ?>
-											<p>If you like Minera, please consider a donation to support it. To remove all the ads forever (for this system) please click the button below and complete the donation (cost: 0.01 <i class="fa fa-btc"></i> for one system for life).</p>
+											<p>If you like Minera, please consider a donation to support it. To remove all the ads forever (for this system) please click the button below and complete the payment (cost: 50$ for one system for life).</p>
 											<?php if ($env === 'development') : ?>
-												<p><a class="coinbase-button" data-env="sandbox" data-code="0897e9510eba42b39d4a4a3e6a4742df" data-button-style="custom_large" data-button-text="Remove Ads" data-width="185" data-heigth="60" href="https://sandbox.coinbase.com/checkouts/0897e9510eba42b39d4a4a3e6a4742df" data-custom="<?php echo $mineraSystemId.'||removeads||'.site_url('app/dashboard') ?>">Remove Ads</a></p>
+												<p><a class="btn btn-lg btn-primary" href="http://localhost:3010/ads-free?mineraId=<?php echo $mineraSystemId ?>" target="_blank"><i class="fa fa-shopping-cart"></i> Remove Ads</a></p>
 											<?php else : ?>
-												<p><a class="coinbase-button" data-code="ee38d16e2e37e5f148153a8817d5dc27" data-button-style="custom_large" data-button-text="Remove Ads" data-width="185" data-heigth="60" href="https://sandbox.coinbase.com/checkouts/ee38d16e2e37e5f148153a8817d5dc27" data-custom="<?php echo $mineraSystemId.'||removeads||'.site_url('app/dashboard') ?>">Remove Ads</a></p>
+												<p><a class="btn btn-lg btn-primary" href="https://getminera.com/ads-free?mineraId=<?php echo $mineraSystemId ?>" target="_blank"><i class="fa fa-shopping-cart"></i> Remove Ads</a></p>
 											<?php endif; ?>
 										<?php else : ?>
 											<p>You are ads-free, Thanks!</p>
-			                            	<a class="coinbase-button" data-code="01ce206aaaf1a8659b07233d9705b9e8" data-button-style="custom_large" data-width="210" data-heigth="60" href="https://www.coinbase.com/checkouts/01ce206aaaf1a8659b07233d9705b9e8">Donate Bitcoins</a>
+			                            	<a class="btn btn-lg btn-primary" href="https://commerce.coinbase.com/checkout/3e2f18f4-5112-44fe-9747-36ced4669b83" target="_blank"><i class="fa fa-gift"></i> Donate Bitcoins</a>
 										<?php endif; ?>
-										<p><strong>Bitcoin</strong>: <code><a href="bitcoin:19kDRygdVZUq1ARrht6544CGaPzMnF1Q1b" target="_blank">19kDRygdVZUq1ARrht6544CGaPzMnF1Q1b</a></code></p>
 									</div><!-- /.box-body -->
 									<?php if (!$adsFree) : ?>
 									<div class="box-footer text-center" style="clear:both">
@@ -353,8 +357,8 @@
 								<div class="poolSortable ui-sortable">
 									<?php $savedPools = json_decode($minerdPools); $donationPool = false; ?>
 									<?php $s = (count($savedPools) == 0) ? 3 : count($savedPools); ?>
-									<?php $donationHelp = '<h6><strong>Why can\'t I remove this pool?</strong></h6>
-														<p><small>Now, you can remove the donation pool clicking the button below, but if you hadn\'t issue with it and you like Minera, you should think to keep it as failover pool because your support is really needed to continue developing Minera. So please, before clicking the button below, consider keeping the donation pool as at least your latest failover. Thanks for your support. (If you have enabled time donation, this pool is automatically added.)</small></p>
+									<?php $donationHelp = '<h6><strong>Minera pool</strong></h6>
+														<p><small>You can always remove the Minera donation pool clicking the button below, but if you hadn\'t issue with it and you like Minera, you should think to keep it as failover pool because your support is really needed to continue developing Minera. So please, before clicking the button below, consider keeping the donation pool as at least your latest failover. Thanks for your support. (If you have enabled time donation, this pool is automatically added.)</small></p>
 														<p><button class="btn btn-danger btn-xs del-pool-row" name="del-row" value="1"><i class="fa fa-times"></i> Remove donation pool </button></p>'; ?>
 									<?php for ($i=0;$i<=$s;$i++) : ?>
 										<?php if ( isset($savedPools[$i]->url) && 
@@ -865,9 +869,18 @@
 	                        </div>
 						    
 	                        <div class="box-body">
-								<p>You can scan your network or add your network device manually. If you have miners like Antminer S1/S2 or RockMiner R3-Box or any miner with a networked connection, now you can control them in Minera.</p>
-								<h6>Network names are picked up randomly from a small constellation database, you can change it.</h6>
-						    	<p><button class="btn bg-olive scan-network">Scan network</button></p>
+								<p>You can scan your network or add your network device manually. If you have miners like Antminer or RockMiner or any miner with a networked connection, you can control them in Minera.</p>
+								<h6>Network names are picked up randomly from a small constellation database, you can change it. To scan your network insert it with subnet in the input below, like this: 192.168.1.0/24</h6>
+								<div class="row">
+									<div class="col-lg-4 col-md-6 col-sm-12">
+								    	<div class="form-group">
+								    		<div class="input-group">
+								    			<input name="networkToScan" id="network-to-scan" value="" class="form-control" placeholder="192.168.1.0/24" />
+								    			<span class="input-group-btn"><button type="button" class="btn bg-olive scan-network">Scan network</button></span>
+								    		</div>
+								    	</div>
+								    </div>
+								</div>
 
 								<div class="alert alert-warning alert-no-net-devices" style="display:none">There aren't new network devices, try to add them manually.</div>
 
@@ -877,16 +890,19 @@
 											<strong>Status</strong>
 										</div>
 										<div class="col-xs-3">
-											<strong>Miner Name</strong>
-										</div>
-										<div class="col-xs-3">
-											<strong>Miner IP</strong>
+											<strong>Name</strong>
 										</div>
 										<div class="col-xs-2">
-											<strong>Miner Port</strong>
+											<strong>IP</strong>
 										</div>
 										<div class="col-xs-2">
-											<strong>Miner Algorithm</strong>
+											<strong>Port</strong>
+										</div>
+										<div class="col-xs-1">
+											<strong>Algorithm</strong>
+										</div>
+										<div class="col-xs-2">
+											<strong>Type</strong>
 										</div>
                                     </div>
 								</div>
@@ -905,24 +921,32 @@
 										    			<input type="text" class="form-control net_miner_name" placeholder="Miner Name" name="net_miner_name[]" value="<?php echo (isset($networkMiner->name)) ? $networkMiner->name : ''; ?>" />
 										    		</div>
 										    	</div>
-										    	<div class="col-xs-3">
+										    	<div class="col-xs-2">
 										    		<div class="input-group">
 										    			<span class="input-group-addon"><i class="fa fa-hdd-o"></i></span>
-										    			<input type="text" class="form-control net_miner_ip" placeholder="Miner Ip Address" name="net_miner_ip[]" value="<?php echo (isset($networkMiner->ip)) ? $networkMiner->ip : ''; ?>" />
+										    			<input type="text" class="form-control net_miner_ip" placeholder="Miner Ip Address (192.168.1.10)" name="net_miner_ip[]" value="<?php echo (isset($networkMiner->ip)) ? $networkMiner->ip : ''; ?>" />
 										    		</div>
 										    	</div>
 										    	<div class="col-xs-2">
 										    		<div class="input-group">
 										    			<span class="input-group-addon"><i class="fa fa-arrow-right"></i></span>
-										    			<input type="text" class="form-control net_miner_port" placeholder="Miner Port" name="net_miner_port[]" value="<?php echo (isset($networkMiner->port)) ? $networkMiner->port : ''; ?>" />
+										    			<input type="text" class="form-control net_miner_port" placeholder="Miner Port (4028)" name="net_miner_port[]" value="<?php echo (isset($networkMiner->port)) ? $networkMiner->port : ''; ?>" />
 										    		</div>
 										    	</div>
-										    	<div class="col-xs-2">
+										    	<div class="col-xs-1">
 										    		<div class="input-group">
 										    			<select class="form-control net_miner_algo" name="net_miner_algo[]">
 											    			<option <?php if (isset($networkMiner->algo) && $networkMiner->algo === "SHA-256") echo "selected" ?>>SHA-256</option>
 											    			<option <?php if (isset($networkMiner->algo) && $networkMiner->algo === "Scrypt") echo "selected" ?>>Scrypt</option>
-
+											    			<option <?php if (isset($networkMiner->algo) && $networkMiner->algo === "Dash") echo "selected" ?>>Dash</option>
+										    			</select>
+										    		</div>
+										    	</div>
+										    	<div class="col-xs-2">
+										    		<div class="input-group">
+										    			<select class="form-control net_miner_type" name="net_miner_type[]">
+											    			<option <?php if (isset($networkMiner->type) && $networkMiner->type === "newAnt") echo "selected" ?> value="newAnt">Antminer (Any new supported)</option>
+											    			<option <?php if (isset($networkMiner->type) && $networkMiner->type === "other") echo "selected" ?> value="other">Other</option>
 										    			</select>
 										    		</div>
 										    	</div>
@@ -945,26 +969,35 @@
 									    			<input type="text" class="form-control net_miner_name" placeholder="Miner Name" name="net_miner_name[]" value="" />
 									    		</div>
 									    	</div>
-									    	<div class="col-xs-3">
+									    	<div class="col-xs-2">
 									    		<div class="input-group">
 									    			<span class="input-group-addon"><i class="fa fa-hdd-o"></i></span>
-									    			<input type="text" class="form-control net_miner_ip" placeholder="Miner Ip Address" name="net_miner_ip[]" value="" />
+									    			<input type="text" class="form-control net_miner_ip" placeholder="Miner Ip Address (192.168.1.10)" name="net_miner_ip[]" value="" />
 									    		</div>
 									    	</div>
 									    	<div class="col-xs-2">
 									    		<div class="input-group">
 									    			<span class="input-group-addon"><i class="fa fa-arrow-right"></i></span>
-									    			<input type="text" class="form-control net_miner_port" placeholder="Miner Port" name="net_miner_port[]" value="" />
+									    			<input type="text" class="form-control net_miner_port" placeholder="Miner Port (4028)" name="net_miner_port[]" value="" />
 									    		</div>
 									    	</div>
-									    	<div class="col-xs-2">
+									    	<div class="col-xs-1">
 									    		<div class="input-group">
 									    			<select class="form-control net_miner_algo" name="net_miner_algo[]">
 										    			<option>SHA-256</option>
 										    			<option>Scrypt</option>
+										    			<option>Dash</option>
 									    			</select>
 									    		</div>
 									    	</div>
+									    	<div class="col-xs-2">
+										    		<div class="input-group">
+										    			<select class="form-control net_miner_type" name="net_miner_type[]">
+											    			<option value="newAnt">Antminer (Any new supported)</option>
+											    			<option value="other">Other</option>
+										    			</select>
+										    		</div>
+										    	</div>
 									    	<div class="col-xs-1">
 									    		<button style="margin-top:5px;" class="btn btn-danger btn-xs del-net-row" name="del-net-row" value="1"><i class="fa fa-times"></i></button>
 									    	</div>
@@ -977,7 +1010,7 @@
 								</div>								
 	                        </div>
 						    <div class="box-footer">
-						    	<p class="small">Pools for network devices can be handle from the dashboard</p>
+						    	<p class="small">Pools for network devices can be handle from the dashboard. If you select "Antminer" it should work with devices like S9, S9i, V9, Z9, L3+, L3++, D3. If this doesn't work please <a href="https://github.com/getminera/minera/issues/236#issuecomment-427736398" target="_blank">follow instruction here</a> and tell me the output of that command.</p>
 						    </div>
 	                    </div>
 	                                            

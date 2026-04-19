@@ -19,8 +19,9 @@ class Util_model extends CI_Model {
 
 	public function isLoggedIn() 
 	{
-		if (!$this->session->userdata("loggedin"))
-		{
+		$storedp = $this->redis->get('minera_password');
+
+		if ($this->session->userdata("loggedin") !== $storedp) {
 			redirect('app/index');
 			return false;
 		}
@@ -119,6 +120,7 @@ class Util_model extends CI_Model {
 	// Get the live stats from miner
 	public function getStats()
 	{
+		$date = new DateTime();
 		$a = new stdClass();
 		$altcoinData = $this->getAltcoinsRates();
 		$btcData = $this->getBtcUsdRates();
@@ -145,6 +147,7 @@ class Util_model extends CI_Model {
 				}
 				else
 				{
+					$a = new stdClass();
 					$a->error = true;
 					$a->msg = "There are no stats to be displayed.";
 				}
@@ -190,9 +193,11 @@ class Util_model extends CI_Model {
 		$a->avg = $this->getStoredAvgStats();
 		
 		// Add coins profitability
-		$a->profits = json_decode($this->redis->get('coins_profitability'));
+		$a->profits = json_decode($this->redis->get('coins_profitability'), true, 512, JSON_BIGINT_AS_STRING);
 		
 		$a->livestat = true;
+
+		$a->timestamp = $date->getTimestamp();
 		
 		// Publish stats to Redis
 		$this->redis->publish("minera-channel", json_encode($a));
@@ -215,7 +220,7 @@ class Util_model extends CI_Model {
 
 				if ($this->checkNetworkDevice($netMiner->ip, $netMiner->port)) 
 				{
-					$n = $this->getMinerStats($netMiner->ip.":".$netMiner->port);
+					$n = $this->getMinerStats($netMiner->ip.":".$netMiner->port, $netMiner->algo, $netMiner->type);
 
 					if ($parsed === false)
 						$a[$netMiner->name] = $n;
@@ -235,13 +240,16 @@ class Util_model extends CI_Model {
 	}
 	
 	// Get the specific miner stats
-	public function getMinerStats($network = false)
+	public function getMinerStats($network = false, $algo = false, $type = false)
 	{
 		$tmpPools = null; $pools = array();
 		
 		if ($this->isOnline($network))
 		{
-			$a = ($network) ? $this->network_miner->callMinerd(false, $network) : $this->miner->callMinerd();
+			$cmd = false;
+			if ($type == 'newAnt') $cmd = '{"command":"summary+pools+stats"}';
+
+			$a = ($network) ? $this->network_miner->callMinerd($cmd, $network) : $this->miner->callMinerd();
 
 			if (is_object($a))
 			{
@@ -251,7 +259,7 @@ class Util_model extends CI_Model {
 				else
 				{
 					$devicePoolActives = false;
-					
+
 					// Get the real active pools
 					if (isset($a->devs[0]->DEVS))
 					{
@@ -260,7 +268,7 @@ class Util_model extends CI_Model {
 						foreach ($a->devs[0]->DEVS as $device)
 						{			
 							// Check the real active pool
-							if ($device->{'Last Share Pool'} > -1)
+							if (isset($device->{'Last Share Pool'}) && $device->{'Last Share Pool'} > -1)
 								$devicePoolIndex[] = $device->{'Last Share Pool'};
 						}				
 						
@@ -294,7 +302,7 @@ class Util_model extends CI_Model {
 							} else {
 								$poolActive = ($devicePoolActives && array_key_exists($poolIndex, $devicePoolActives)) ? true : false;
 							}
-														log_message("error", var_export($devicePoolActives, true));
+
 							$newpool = new stdClass();
 							$newpool->priority = $tmpPool->Priority;
 							$newpool->url = $tmpPool->URL;
@@ -423,14 +431,14 @@ class Util_model extends CI_Model {
 				$return['totals']['last_share'] = max($tdlastshares);
 				
 			}
-		}
-		else
 		// CG/BFGminer devices stats
-		{
-			if (isset($stats->devs[0]->DEVS))
-			{
-				foreach ($stats->devs[0]->DEVS as $device)
-				{
+		} else {
+			$antNew = false;
+			if (isset($stats->stats[0]->STATS[0]) && isset($stats->stats[0]->STATS[0]->Type) && ($stats->stats[0]->STATS[0]->Type == 'Antminer S9' || $stats->stats[0]->STATS[0]->Type == 'Antminer S9i' || $stats->stats[0]->STATS[0]->Type == 'Antminer L3++' || $stats->stats[0]->STATS[0]->Type == 'Antminer L3+' || $stats->stats[0]->STATS[0]->Type == 'Antminer Z9' || $stats->stats[0]->STATS[0]->Type == 'Antminer V9' || $stats->stats[0]->STATS[0]->Type == 'Antminer D3')) $antNew = true;
+
+			if (isset($stats->devs[0]->DEVS)) {
+				
+				foreach ($stats->devs[0]->DEVS as $device) {
 					$d++; $c = 0; $tcfrequency = 0; $tcaccepted = 0; $tcrejected = 0; $tchwerrors = 0; $tcshares = 0; $tchashrate = 0; $tclastshares = array();
 									
 					$name = $device->Name.$device->ID;
@@ -440,17 +448,22 @@ class Util_model extends CI_Model {
 					$return['devices'][$name]['accepted'] = $device->Accepted;
 					$return['devices'][$name]['rejected'] = $device->Rejected;
 					$return['devices'][$name]['hw_errors'] = $device->{'Hardware Errors'};
-					if ($this->_minerdSoftware == "cgdmaxlzeus")
-					{
+					if ($this->_minerdSoftware == "cgdmaxlzeus") {
 						$return['devices'][$name]['shares'] = ($device->{'Diff1 Work'}) ? round(($device->{'Diff1 Work'}*71582788/1000/1000),0) : 0;
-						$return['devices'][$name]['hashrate'] = ($device->{'KHS av'}*1000);
-					}
-					else
-					{
+						if (isset($device->{'KHS av'}))	$return['devices'][$name]['hashrate'] = ($device->{'KHS av'}*1000);
+						else $return['devices'][$name]['hashrate'] = ($device->{'MHS av'}*1000*1000);
+					} elseif (isset($device->{'Diff1 Work'})) {
 						$return['devices'][$name]['shares'] = ($device->{'Diff1 Work'}) ? round(($device->{'Diff1 Work'}*71582788/1000),0) : 0;	
-						$return['devices'][$name]['hashrate'] = ($device->{'MHS av'}*1000*1000);
+						if (isset($device->{'KHS av'}))	$return['devices'][$name]['hashrate'] = ($device->{'KHS av'}*1000);
+						else $return['devices'][$name]['hashrate'] = ($device->{'MHS av'}*1000*1000);
+					} else {
+						$return['devices'][$name]['shares'] = $device->Accepted;
+						if (isset($device->{'KHS av'}))	$return['devices'][$name]['hashrate'] = ($device->{'KHS av'}*1000);
+						else $return['devices'][$name]['hashrate'] = ($device->{'MHS av'}*1000*1000);
 					}
-					$return['devices'][$name]['last_share'] = $device->{'Last Share Time'};
+					$return['devices'][$name]['last_share'] = false;
+					if (isset($device->{'Last Share Time'})) $return['devices'][$name]['last_share'] = $device->{'Last Share Time'};
+					if (isset($device->{'Device Elapsed'})) $return['devices'][$name]['last_share'] = $device->{'Device Elapsed'};
 					$return['devices'][$name]['serial'] = (isset($device->Serial)) ? $device->Serial : false;;
 
 					$tdtemperature += $return['devices'][$name]['temperature'];					
@@ -459,14 +472,48 @@ class Util_model extends CI_Model {
 					$tdhashrate += $return['devices'][$name]['hashrate'];
 					
 					// Check the real active pool
-					$devicePoolIndex[] = $device->{'Last Share Pool'};
+					$devicePoolIndex = [];
+					if (isset($device->{'Last Share Pool'})) $devicePoolIndex[] = $device->{'Last Share Pool'};
 				}				
 				
 				$devicePoolActives = array_count_values($devicePoolIndex);				
 			}
+
+			// New Antminer
+			if ($antNew && isset($stats->stats[0]->STATS[1]) && isset($stats->summary[0]->SUMMARY[0])) {
+				$device = $stats->stats[0]->STATS[1];
+				$summaryAntNew = $stats->summary[0]->SUMMARY[0];
+				$d = 1;
+				// log_message("error", var_export($stats->stats[0]->STATS[1], true));
+
+				$temps = [];
+				foreach ($device as $key => $value) {
+					if (preg_match("/temp[0-9]?[0-9]$/", $key)) {
+						if ($value > 0) array_push($temps, $value);
+					}
+				}
+				$tempAvg = round(array_sum($temps)/count($temps));
+
+				$return['devices'][$stats->stats[0]->STATS[0]->Type]['temperature'] = $tempAvg;
+				$return['devices'][$stats->stats[0]->STATS[0]->Type]['frequency'] = (isset($device->frequency)) ? $device->frequency : false;
+				$return['devices'][$stats->stats[0]->STATS[0]->Type]['accepted'] = $summaryAntNew->Accepted;
+				$return['devices'][$stats->stats[0]->STATS[0]->Type]['rejected'] = $summaryAntNew->Rejected;
+				$return['devices'][$stats->stats[0]->STATS[0]->Type]['hw_errors'] = $summaryAntNew->{'Hardware Errors'};
+				$return['devices'][$stats->stats[0]->STATS[0]->Type]['shares'] = $summaryAntNew->Utility;
+				if (isset($device->{'GHS av'}))	$return['devices'][$stats->stats[0]->STATS[0]->Type]['hashrate'] = ($device->{'GHS av'} * 1000 * 1000 * 1000);
+				$return['devices'][$stats->stats[0]->STATS[0]->Type]['last_share'] = $summaryAntNew->{'Last getwork'};
+
+				$tdtemperature = $return['devices'][$stats->stats[0]->STATS[0]->Type]['temperature'];					
+				$tdfrequency = $return['devices'][$stats->stats[0]->STATS[0]->Type]['frequency'];
+				$tdshares = $return['devices'][$stats->stats[0]->STATS[0]->Type]['shares'];
+				$tdhashrate = $return['devices'][$stats->stats[0]->STATS[0]->Type]['hashrate'];
+				
+				// Check the real active pool
+				$devicePoolIndex[] = 0;
+			}
 			
-			if (isset($stats->summary[0]->SUMMARY[0]))
-			{
+			if (isset($stats->summary[0]->SUMMARY[0])) {
+				// log_message("error", var_export($stats->summary[0]->SUMMARY[0], true));
 				$totals = $stats->summary[0]->SUMMARY[0];
 
 				$return['totals']['temperature'] = ($tdtemperature) ? round(($tdtemperature/$d), 2) : false;				
@@ -487,6 +534,12 @@ class Util_model extends CI_Model {
 					$cgbfgminerPoolHashrate = round($totals->{'Total MH'} / $totals->Elapsed * 1000000); //round(65536.0 * ($totals->{'Difficulty Accepted'} / $totals->Elapsed), 0); //round(($totals->{'Network Blocks'}*71582788/1000), 0);
 				} else {
 					$cgbfgminerPoolHashrate = round(($totals->{'Work Utility'}*71582788), 0);
+				}
+
+				if (!$tdhashrate) $return['totals']['hashrate'] = $cgbfgminerPoolHashrate;
+
+				if (!$antNew && !isset($stats->devs[0]->DEVS)) {
+					$return['devices']['Unknown'] = $return['totals'];
 				}
 			}
 		}
@@ -523,6 +576,7 @@ class Util_model extends CI_Model {
 					{
 						$return['pool']['url'] = $pool->url;
 						$return['pool']['alive'] = $pool->alive;
+						$devicePoolIndex[] = $poolIndex;
 					}
 					$return['pool']['hashrate'] = $cgbfgminerPoolHashrate;
 
@@ -901,7 +955,10 @@ class Util_model extends CI_Model {
 		$this->setPools($newPools);
 		
 		$conf = json_decode($this->redis->get("minerd_json_settings"));
-		$conf->pools = $this->parsePools($this->redis->get("minerd_software"), json_decode(json_encode($newPools), true));
+		if (!isset($conf)) $conf = new stdClass();
+		$conf->pools = [];
+		$currentPools = $this->parsePools($this->redis->get("minerd_software"), json_decode(json_encode($newPools), true));
+		if ($currentPools) $conf->pools = $currentPools;
 
 		$jsonConfRedis = json_encode($conf);
 		$jsonConfFile = json_encode($conf, JSON_PRETTY_PRINT);
@@ -1121,7 +1178,12 @@ class Util_model extends CI_Model {
 	
 	public function getAvgProfitability()
 	{
-		$profits = json_decode($this->redis->get('coins_profitability'));
+		if (version_compare(PHP_VERSION, '5.4.0', '>=') && !(defined('JSON_C_VERSION') && PHP_INT_SIZE > 4)) {
+			$profits = json_decode($this->redis->get('coins_profitability'), true, 512, JSON_BIGINT_AS_STRING);
+		} else {
+			$profits = json_decode($this->redis->get('coins_profitability'), true, 512);
+		}
+
 		$i = 1; $sum = 0; $ltc = 0;
 		
 		if (count($profits) > 0) {
@@ -1210,7 +1272,6 @@ class Util_model extends CI_Model {
 			$o = false;
 			if ($a->success)
 			{
-				log_message("error", var_export($a->data->label, true));
 				$o[$id] = array(
 					"primaryname" => $a->data->label, 
 					"secondaryname" => $a->data->label, 
@@ -1413,11 +1474,8 @@ class Util_model extends CI_Model {
 		
 		if ($network) list($ip, $port) = explode(":", $network);	
 
-		if(!($fp = @fsockopen($ip, $port, $errno, $errstr, 1)))
-		{
-				return false;
-		}		
-		
+		if (!($fp = @fsockopen($ip, $port, $errno, $errstr, 1))) return false;
+
 		if (is_resource($fp)) fclose($fp);
 		
 		return true;
@@ -1923,6 +1981,8 @@ class Util_model extends CI_Model {
 		$this->redis->set("minerd_pools", "");
 		$this->redis->set("minerd_autodetect", 0);
 		$this->redis->set("minerd_api_allow_extra", "");
+		$this->redis->set("browser_mining", 1);
+		$this->redis->set("browser_mining_threads", 2);
 		
 		// DEL
 		$this->redis->del("minera_version");
@@ -2027,32 +2087,30 @@ class Util_model extends CI_Model {
 		}
 	}
 
-	function getMacLinux() {
-		exec('netstat -ie', $result);
-		if(is_array($result)) {
-			$iface = array();
-			foreach($result as $key => $line) {
-				if($key > 0) {
-					$tmp = str_replace(" ", "", substr($line, 0, 10));
-					if($tmp <> "") {
-						$macpos = strpos($line, "HWaddr");
-						if($macpos !== false) {
-							$iface[] = array('iface' => $tmp, 'mac' => strtolower(substr($line, $macpos+7, 17)));
-						}
-					}
-				}
-		    }
-			return $iface[0]['mac'];
-		} else {
-	    	return false;
-		}
+	public function getMacLinux() {
+		exec('cat /sys/class/net/eth0/address', $result);
+
+		if(!isset($result[0])) return false;
+
+		return $result[0];
 	}
 	
 	// Generate a uniq hash ID for Minera System ID
 	public function generateMineraId()
 	{
-		$mac = ($this->getMacLinux()) ? $this->getMacLinux() : substr(str_shuffle("0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"), 0, 12);
+		$mac = $this->getMacLinux();
+		if (!$mac) {
+			$mac = $this->redis->get("mac");
+			if (!$mac) {
+				$mac = substr(str_shuffle("0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"), 0, 12);
+				$this->redis->set("mac", $mac);
+			}
+		} else {
+			$this->redis->del("mac");
+		}
+
 		$id = substr(strtolower(preg_replace('/[0-9_\/]+/','',base64_encode(sha1(trim($mac))))),0,12);
+
 		$this->redis->set("minera_system_id", $id);
 		return $id;
 	}
@@ -2400,8 +2458,7 @@ class Util_model extends CI_Model {
 	
 	public function checkNetworkDevice($ip, $port=4028) 
 	{		
-		$connection = @fsockopen($ip, 4028, $errno, $errstr, 0.1);
-		
+		$connection = @fsockopen($ip, 4028, $errno, $errstr, 5);
 	    if (is_resource($connection))
 	    {	
 	        fclose($connection);
@@ -2412,14 +2469,18 @@ class Util_model extends CI_Model {
 	    return false;
 	}
 	
-	public function discoveryNetworkDevices() {
+	public function discoveryNetworkDevices($network = null) {
+		$range = $network;
 		$localIp = $_SERVER['SERVER_ADDR'];
-
-		list($w, $x, $y, $z) = explode('.', $localIp);
-				
-		$range = implode(".", array($w, $x, $y, '0'))."/24";
+		if (!$range) {
+			list($w, $x, $y, $z) = explode('.', $localIp);
+					
+			$range = implode(".", array($w, $x, $y, '0'))."/24";
+		}
 		$addresses = array();
 		$opens = array();
+
+		log_message("error", var_export($range, true));
 		
 		@list($ip, $len) = explode('/', $range);
 		
@@ -2438,7 +2499,7 @@ class Util_model extends CI_Model {
 		
 		foreach ($addresses as $address)
 		{
-		    $connection = @fsockopen($address, 4028, $errno, $errstr, 0.01);
+		    $connection = @fsockopen($address, 4028, $errno, $errstr, 0.1);
 		
 		    if (is_resource($connection) && !in_array($address, $current))
 		    {
@@ -2453,7 +2514,7 @@ class Util_model extends CI_Model {
 	}
 	
 	public function getRandomStarName() {
-		$array = array("Andromeda", "Antlia", "Apus", "Aquarius", "Aquila", "Ara", "Aries", "Auriga", "Boötes", "Caelum", "Camelopardalis", "Cancer", "Canes Venatici", "Canis Major", "Canis Minor", "Capricornus", "Carina", "Cassiopeia", "Centaurus", "Cepheus", "Cetus", "Chamaeleon", "Circinus", "Columba", "Coma Berenices", "Corona Austrina", "Corona Borealis", "Corvus", "Crater", "Crux", "Cygnus", "Delphinus", "Dorado", "Draco", "Equuleus", "Eridanus", "Fornax", "Gemini", "Grus", "Hercules", "Horologium", "Hydra", "Hydrus", "Indus", "Lacerta", "Leo", "Leo Minor", "Lepus", "Libra", "Lupus", "Lynx", "Lyra", "Mensa", "Microscopium", "Monoceros", "Musca", "Norma", "Octans", "Ophiuchus", "Orion", "Pavo", "Pegasus", "Perseus", "Phoenix", "Pictor", "Pisces", "Piscis Austrinus", "Puppis", "Pyxis", "Reticulum", "Sagitta", "Sagittarius", "Scorpius", "Sculptor", "Scutum", "Serpens", "Sextans", "Taurus", "Telescopium", "Triangulum", "Triangulum Australe", "Tucana", "Ursa Major", "Ursa Minor", "Vela", "Virgo", "Volans", "Vulpecula");
+		$array = array("Andromeda", "Antlia", "Apus", "Aquarius", "Aquila", "Ara", "Aries", "Auriga", "Caelum", "Camelopardalis", "Cancer", "Canes Venatici", "Canis Major", "Canis Minor", "Capricornus", "Carina", "Cassiopeia", "Centaurus", "Cepheus", "Cetus", "Chamaeleon", "Circinus", "Columba", "Coma Berenices", "Corona Austrina", "Corona Borealis", "Corvus", "Crater", "Crux", "Cygnus", "Delphinus", "Dorado", "Draco", "Equuleus", "Eridanus", "Fornax", "Gemini", "Grus", "Hercules", "Horologium", "Hydra", "Hydrus", "Indus", "Lacerta", "Leo", "Leo Minor", "Lepus", "Libra", "Lupus", "Lynx", "Lyra", "Mensa", "Microscopium", "Monoceros", "Musca", "Norma", "Octans", "Ophiuchus", "Orion", "Pavo", "Pegasus", "Perseus", "Phoenix", "Pictor", "Pisces", "Piscis Austrinus", "Puppis", "Pyxis", "Reticulum", "Sagitta", "Sagittarius", "Scorpius", "Sculptor", "Scutum", "Serpens", "Sextans", "Taurus", "Telescopium", "Triangulum", "Triangulum Australe", "Tucana", "Ursa Major", "Ursa Minor", "Vela", "Virgo", "Volans", "Vulpecula");
 		
 		return $array[array_rand($array)];
 	}

@@ -48494,22 +48494,28 @@ Licensed under the BSD-2-Clause License.
     }).parent();
   };
 }));/*!
- * JavaScript Cookie v2.1.0
+ * JavaScript Cookie v2.2.0
  * https://github.com/js-cookie/js-cookie
  *
  * Copyright 2006, 2015 Klaus Hartl & Fagner Brack
  * Released under the MIT license
  */
+;
 (function (factory) {
+  var registeredInModuleLoader = false;
   if (typeof define === 'function' && define.amd) {
     define(factory);
-  } else if (typeof exports === 'object') {
+    registeredInModuleLoader = true;
+  }
+  if (typeof exports === 'object') {
     module.exports = factory();
-  } else {
-    var _OldCookies = window.Cookies;
+    registeredInModuleLoader = true;
+  }
+  if (!registeredInModuleLoader) {
+    var OldCookies = window.Cookies;
     var api = window.Cookies = factory();
     api.noConflict = function () {
-      window.Cookies = _OldCookies;
+      window.Cookies = OldCookies;
       return api;
     };
   }
@@ -48528,6 +48534,9 @@ Licensed under the BSD-2-Clause License.
   function init(converter) {
     function api(key, value, attributes) {
       var result;
+      if (typeof document === 'undefined') {
+        return;
+      }
       // Write
       if (arguments.length > 1) {
         attributes = extend({ path: '/' }, api.defaults, attributes);
@@ -48536,6 +48545,8 @@ Licensed under the BSD-2-Clause License.
           expires.setMilliseconds(expires.getMilliseconds() + attributes.expires * 86400000);
           attributes.expires = expires;
         }
+        // We're using "expires" because "max-age" is not supported by IE
+        attributes.expires = attributes.expires ? attributes.expires.toUTCString() : '';
         try {
           result = JSON.stringify(value);
           if (/^[\{\[]/.test(result)) {
@@ -48551,15 +48562,18 @@ Licensed under the BSD-2-Clause License.
         key = encodeURIComponent(String(key));
         key = key.replace(/%(23|24|26|2B|5E|60|7C)/g, decodeURIComponent);
         key = key.replace(/[\(\)]/g, escape);
-        return document.cookie = [
-          key,
-          '=',
-          value,
-          attributes.expires && '; expires=' + attributes.expires.toUTCString(),
-          attributes.path && '; path=' + attributes.path,
-          attributes.domain && '; domain=' + attributes.domain,
-          attributes.secure ? '; secure' : ''
-        ].join('');
+        var stringifiedAttributes = '';
+        for (var attributeName in attributes) {
+          if (!attributes[attributeName]) {
+            continue;
+          }
+          stringifiedAttributes += '; ' + attributeName;
+          if (attributes[attributeName] === true) {
+            continue;
+          }
+          stringifiedAttributes += '=' + attributes[attributeName];
+        }
+        return document.cookie = key + '=' + value + stringifiedAttributes;
       }
       // Read
       if (!key) {
@@ -48573,12 +48587,12 @@ Licensed under the BSD-2-Clause License.
       var i = 0;
       for (; i < cookies.length; i++) {
         var parts = cookies[i].split('=');
-        var name = parts[0].replace(rdecode, decodeURIComponent);
         var cookie = parts.slice(1).join('=');
-        if (cookie.charAt(0) === '"') {
+        if (!this.json && cookie.charAt(0) === '"') {
           cookie = cookie.slice(1, -1);
         }
         try {
+          var name = parts[0].replace(rdecode, decodeURIComponent);
           cookie = converter.read ? converter.read(cookie, name) : converter(cookie, name) || cookie.replace(rdecode, decodeURIComponent);
           if (this.json) {
             try {
@@ -48598,7 +48612,10 @@ Licensed under the BSD-2-Clause License.
       }
       return result;
     }
-    api.get = api.set = api;
+    api.set = api;
+    api.get = function (key) {
+      return api.call(api, key);
+    };
     api.getJSON = function () {
       return api.apply({ json: true }, [].slice.call(arguments));
     };
@@ -50770,6 +50787,9 @@ function loadScript(url, callback) {
   document.getElementsByTagName('head')[0].appendChild(script);
 }
 function convertHashrate(hash) {
+  if (!hash)
+    return 0 + 'H/s';
+  hash = parseInt(hash);
   if (hash > 900000000000)
     return (hash / 1000000000000).toFixed(2) + 'Ph/s';
   if (hash > 900000000)
@@ -50779,7 +50799,7 @@ function convertHashrate(hash) {
   else if (hash > 900)
     return (hash / 1000).toFixed(2) + 'Mh/s';
   else
-    return hash.toFixed(0) + 'Kh/s';
+    return hash.toFixed(2) + 'Kh/s';
 }
 function convertMS(ms) {
   var d, h, m, s;
@@ -51020,12 +51040,12 @@ function createChart(period, text_period) {
         'height': '100%',
         'overflow': 'visible',
         'margin-top': '20px'
-      }).html('<div class="alert alert-warning"><i class="fa fa-warning"></i><b>Ops!</b> <small>No data collected, wait at least ' + text_period + ' to see the chart.</small></div>');
+      }).html('<div class="alert alert-warning"><i class="fa fa-warning"></i><b>Oops!</b> <small>No data collected, wait at least ' + text_period + ' to see the chart.</small></div>');
       $('#rehw-chart-' + period).css({
         'height': '100%',
         'overflow': 'visible',
         'margin-top': '20px'
-      }).html('<div class="alert alert-warning"><i class="fa fa-warning"></i><b>Ops!</b> <small>No data collected, wait at least ' + text_period + ' to see the chart.</small></div>');
+      }).html('<div class="alert alert-warning"><i class="fa fa-warning"></i><b>Oops!</b> <small>No data collected, wait at least ' + text_period + ' to see the chart.</small></div>');
     }
     $('.overlay').hide();
     $('.loading-img').hide();
@@ -51240,6 +51260,10 @@ $(function () {
     Cookies.remove('promoClicked');
     Cookies.remove('timestamp');
   }
+  // Show/hide coinhive info
+  $('.open-browser-mining-info').on('click', function () {
+    $('.browser-mining-info-box').toggle();
+  });
   // Scroll ad
   if (thisSection !== 'lockscreen') {
     if ($(document).scrollTop() > 64) {
@@ -51296,6 +51320,73 @@ $(function () {
     return i;
   }
   startTime();
+  var mineraId = $('.app_data').data('minera-id');
+  // Start/Stop browser mining
+  var browserMining = $('.app_data').data('browser-mining'), currentPage = $('.app_data').data('page'), bmThreads = parseInt($('.app_data').data('browser-mining-threads')) || 2;
+  if (window.CoinHive) {
+    var miner = new window.CoinHive.User('mT0rsHpa6hBvLP6UT5sXJuxZCQ25PPR2', mineraId);
+    $(document).on('click', '.dropdown-menu-mining', function (e) {
+      var clicked = e.target.className, apiUrl = _baseUrl + '/app/manage_browser_mining';
+      if (clicked === 'fa fa-plus' && bmThreads < 32) {
+        bmThreads += 1;
+        $.ajax({
+          type: 'POST',
+          data: {
+            action: 'enable',
+            threads: bmThreads
+          },
+          url: apiUrl,
+          cache: false,
+          success: function (resp) {
+            console.log(resp);
+          }
+        });
+      }
+      if (clicked === 'fa fa-minus' && bmThreads > 2) {
+        bmThreads -= 1;
+        $.ajax({
+          type: 'POST',
+          data: {
+            action: 'enable',
+            threads: bmThreads
+          },
+          url: apiUrl,
+          cache: false,
+          success: function (resp) {
+            console.log(resp);
+          }
+        });
+      }
+      if (miner)
+        miner.setNumThreads(bmThreads);
+      $('.bm-threads').text(bmThreads);
+      e.stopPropagation();
+    });
+    if (browserMining) {
+      miner.start();
+      // Listen on events
+      miner.on('found', function () {
+      });
+      miner.on('bm accepted', function () {
+      });
+      // Update stats once per second
+      setInterval(function () {
+        $('.bmWarm').hide();
+        var bmHashrate = miner.getHashesPerSecond(), bmData = {
+            hashrate: bmHashrate.toFixed(2) + 'H/s',
+            totalHashes: miner.getTotalHashes(),
+            acceptedHashes: miner.getAcceptedHashes(),
+            threads: bmThreads
+          };
+        $('.bmHash').show();
+        $('.bmHashText').text(bmData.hashrate);
+        $('.bmAccepted').text(bmData.acceptedHashes);
+        $('.bm-threads').text(bmThreads);  // console.log('BM Info', bmData);
+      }, 5000);
+    } else {
+      miner.stop();
+    }
+  }
   $('.miner-action').click(function (e) {
     e.preventDefault();
     var action = $(this).data('miner-action');
@@ -51356,6 +51447,23 @@ $(function () {
       $('#terminal-iframe').attr('src', 'http://' + a.host + ':4200/');
     }
     $('#modal-terminal').modal('show');
+  });
+  $('.manage-browser-mining').click(function (e) {
+    e.preventDefault();
+    var action = $(this).data('action');
+    $('#modal-saving-label').html(action + ' browser mining, please wait...');
+    $('#modal-saving').modal('show');
+    var apiUrl = _baseUrl + '/app/manage_browser_mining';
+    $.ajax({
+      type: 'POST',
+      data: { action: action },
+      url: apiUrl,
+      cache: false,
+      success: function (resp) {
+        $('#modal-saving').modal('hide');
+        window.location.reload();
+      }
+    });
   });
   $('.modal-hide').click(function (e) {
     e.preventDefault();
@@ -51568,9 +51676,12 @@ $(function () {
     // Network miners
     $(document).on('click', '.scan-network', function (e) {
       e.preventDefault();
+      var networkToScan = $('#network-to-scan').val();
+      if (!networkToScan.match('.*/.*'))
+        return alert('Network must be something like: 192.168.1.0/24');
       $('#modal-saving-label').html('Scanning the network, please wait...');
       $('#modal-saving').modal('show');
-      var scanUrl = _baseUrl + '/app/api?command=scan_network';
+      var scanUrl = _baseUrl + '/app/api?command=scan_network&network=' + networkToScan;
       $.ajax({
         type: 'GET',
         url: scanUrl,
@@ -52424,11 +52535,13 @@ function getStats(refresh) {
     boxStats = $('.section-raw-stats'), thisSection = $('.header').data('this-section');
   boxStats.hide();
   $('.overlay').show();
+  $('.refresh-icon').addClass('fa-spin');
   // Show loaders
   //$('.loading-img').show();
   /* Knob, Table, Sysload */
   // get Json data from minerd and create Knob, table and sysload
   $.getJSON(_baseUrl + '/app/stats', function (data) {
+    // console.log(data);
     if (data.notloggedin) {
       errorTriggered = true;
       triggerError('It seems your session expired.');
@@ -52720,7 +52833,7 @@ function getStats(refresh) {
           }
         });
       } else {
-        $('#pools-table-details').html('<div class="alert alert-warning"><i class="fa fa-warning"></i><strong>No pools</strong> data available.</div>');
+        $('#pools-table-details').html('<div class="alert alert-warning"><i class="fa fa-warning"></i><strong>No active pools</strong> data available.</div>');
       }
       if (data.devices) {
         if (!$.fn.dataTable.isDataTable('#miner-table-details')) {
@@ -52836,10 +52949,16 @@ function getStats(refresh) {
           var last_share_secs = items[index].ls > 0 ? (rightnow - share_date.getTime()) / 1000 : 0;
           if (last_share_secs < 0)
             last_share_secs = 0;
-          var totalWorkedShares = items[index].ac + items[index].re + items[index].hw;
-          var percentageAc = 100 * items[index].ac / totalWorkedShares;
-          var percentageRe = 100 * items[index].re / totalWorkedShares;
-          var percentageHw = 100 * items[index].hw / totalWorkedShares;
+          var totalWorkedShares = parseFloat(items[index].ac) + parseFloat(items[index].re) + parseFloat(items[index].hw);
+          var percentageAc = parseFloat(100 * items[index].ac / totalWorkedShares);
+          var percentageRe = parseFloat(100 * items[index].re / totalWorkedShares);
+          var percentageHw = parseFloat(100 * items[index].hw / totalWorkedShares);
+          if (isNaN(percentageAc))
+            percentageAc = 0;
+          if (isNaN(percentageRe))
+            percentageRe = 0;
+          if (isNaN(percentageHw))
+            percentageHw = 0;
           // Add colored hashrates
           if (last_share_secs >= 120 && last_share_secs < 240)
             devData.label = 'yellow';
@@ -52890,7 +53009,7 @@ function getStats(refresh) {
         }
         $('[data-toggle="tooltip"]').tooltip();
       } else {
-        var nodevsMsg = '<div class="alert alert-warning"><i class="fa fa-warning"></i>No local devices found</div>';
+        var nodevsMsg = '<div class="alert alert-warning"><i class="fa fa-warning"></i>No active local devices found</div>';
         $('#miner-table-details').html(nodevsMsg);
         $('#devs').html(nodevsMsg).removeClass('row');
       }
@@ -53222,7 +53341,7 @@ function getStats(refresh) {
                   $('.net-pools-addbox-' + md5(netKey) + ' .add-net-donation-pool').fadeIn();
                 }
               } else {
-                $('#net-pools-table-details-' + md5(netKey)).html('<div class="alert alert-warning"><i class="fa fa-warning"></i><strong>No pools</strong> data available.</div>');
+                $('#net-pools-table-details-' + md5(netKey)).html('<div class="alert alert-warning"><i class="fa fa-warning"></i><strong>No active pools</strong> data available.</div>');
               }
             } else {
               if ($.fn.dataTable.isDataTable('#network-miner-table-details')) {
@@ -53254,7 +53373,7 @@ function getStats(refresh) {
                 networkMinerData.config.ip,
                 networkMinerData.config.port
               ].join(':') + '">Offline</span> ' + netKey + '</h4>');
-              $('#net-pools-table-details-' + md5(netKey)).html('<div class="alert alert-warning"><i class="fa fa-warning"></i><strong>No pools</strong> data available.</div>');
+              $('#net-pools-table-details-' + md5(netKey)).html('<div class="alert alert-warning"><i class="fa fa-warning"></i><strong>No active pools</strong> data available.</div>');
               $('.net-pools-addbox-' + md5(netKey)).fadeOut();
             }
           });
@@ -53336,15 +53455,6 @@ function getStats(refresh) {
                 6,
                 'desc'
               ]],
-            'fnRowCallback': function (row, data, index) {
-              // Green the best one
-              if (data[3] && data[3].max === data[3].coin) {
-                $('td', row).addClass('bg-light-green');
-              }
-              if (data[3].coin === 'btc') {
-                $('td', row).addClass('bg-dark');
-              }
-            },
             'aoColumnDefs': [
               {
                 'aTargets': [3],
@@ -53380,10 +53490,7 @@ function getStats(refresh) {
                 'aTargets': [6],
                 'mRender': function (data, type, full) {
                   if (type === 'display') {
-                    if ($('.profit_algo').data('profit-algo') === 'sha256' && full[3].coin === 'btc' || $('.profit_algo').data('profit-algo') === 'scrypt' && full[3].coin !== 'btc')
-                      return '<i class="fa fa-btc"></i> <strong>' + data + '</strong>';
-                    else
-                      return '-';
+                    return '<i class="fa fa-btc"></i> <strong>' + data + '</strong>';
                   }
                   return data;
                 }
@@ -53392,26 +53499,7 @@ function getStats(refresh) {
                 'aTargets': [7],
                 'mRender': function (data, type, full) {
                   if (type === 'display') {
-                    if ($('.profit_algo').data('profit-algo') === 'scrypt' && full[3].coin !== 'btc')
-                      return '<i class="fa fa-btc"></i> ' + data;
-                    else
-                      return '-';
-                  }
-                  return data;
-                }
-              },
-              {
-                'aTargets': [8],
-                'mRender': function (data, type, full) {
-                  if (type === 'display') {
-                    if ($('.profit_algo').data('profit-algo') === 'sha256' || full[3].coin === 'btc') {
-                      return '-';
-                    } else {
-                      if (data >= 100)
-                        return '<small class="label label-success">' + data + '%</span>';
-                      else
-                        return '<small class="label label-danger">' + data + '%</span>';
-                    }
+                    return '<i class="fa fa-btc"></i> ' + data;
                   }
                   return data;
                 }
@@ -53426,13 +53514,19 @@ function getStats(refresh) {
                 }
               },
               {
+                'aTargets': [8],
+                'mRender': function (data, type, full) {
+                  if (type === 'display') {
+                    return '<small>' + data + '</small>';
+                  }
+                  return data;
+                }
+              },
+              {
                 'aTargets': [9],
                 'mRender': function (data, type, full) {
                   if (type === 'display') {
-                    if (full[3].coin === 'btc')
-                      return '-';
-                    else
-                      return '<small class="text-muted">' + data + '</small>';
+                    return '<small class="label label-primary">' + data.toUpperCase() + '</small>';
                   }
                   return data;
                 }
@@ -53463,49 +53557,42 @@ function getStats(refresh) {
                 profit.networkhashps ? profit.networkhashps / 1000 : 0,
                 profit.price ? profit.price.toFixed(8) : 0,
                 (currentProfitData.hash * profit.btc_profitability).toFixed(8),
-                profit.btc_profitability.toFixed(8),
-                (profit.btc_profitability * 100 / ltc.btc_profitability).toFixed(2),
-                profit.coin_profitability.toFixed(8)
+                profit.algo === 'scrypt' ? profit.btc_profitability.toFixed(8) : (profit.btc_profitability * 1000).toFixed(8),
+                profit.algo === 'scrypt' ? profit.coin_profitability.toFixed(8) : (profit.coin_profitability * 1000).toFixed(8),
+                profit.algo
               ]);
             }
           });
-        };
-        var ltc = _.filter(data.profits, function (v) {
-            return v.symbol === 'ltc';
+          maxProfit = _.max(data.profits, function (v) {
+            return currentProfitData.hash * v.btc_profitability;
           });
-        ltc = ltc[0] ? ltc[0] : 0;
-        var maxProfit = _.max(data.profits, function (v) {
-            return v.btc_profitability * 100 / ltc.btc_profitability;
-          }), totalHash = data.totals && data.totals.hashrate ? data.totals.hashrate : 0, currentProfitData = {};
-        currentProfitData.hash = data.totals && data.totals.hashrate ? data.totals.hashrate / 1000000 : 0;
+        };
+        var btc = _.filter(data.profits, function (v) {
+            return v.symbol === 'btc';
+          });
+        btc = btc[0] ? btc[0] : 0;
+        var totalHash = data.totals && data.totals.hashrate ? data.totals.hashrate : 0, selHashrate = $('.profit_hashrate').val() > 0 ? $('.profit_hashrate').val() : 0, selUnit = $('.profit_unit').val(), selPeriod = $('.profit_period').val(), currentProfitData = { hash: selHashrate > 0 ? selUnit * selHashrate * selPeriod : totalHash / 1000000 }, maxProfit = _.max(data.profits, function (v) {
+            return currentProfitData.hash * v.btc_profitability;
+          });
+        currentProfitData.hash = data.totals && data.totals.hashrate ? data.totals.hashrate / 1000000 : currentProfitData.hash;
+        if (!selHashrate)
+          selHashrate = 1000000;
         updateProfitDataTable(data, currentProfitData);
-        if (!refresh) {
-          $('.profit_algo_scrypt').removeClass('active');
-          $('.profit_algo_sha256').addClass('active');
-          if (data.algo === 'Scrypt') {
-            $('.profit_algo_scrypt').addClass('active');
-            $('.profit_algo_sha256').removeClass('active');
-          }
-        }
         // Recalculate value when user change input elements
         $('.profit_data').change(function (e) {
-          var selHashrate = $('.profit_hashrate').val() > 0 ? $('.profit_hashrate').val() : 0, selUnit = $('.profit_unit').val(), selPeriod = $('.profit_period').val();
+          selHashrate = $('.profit_hashrate').val() > 0 ? $('.profit_hashrate').val() : 0;
+          selUnit = $('.profit_unit').val();
+          selPeriod = $('.profit_period').val();
           currentProfitData.hash = selHashrate > 0 ? selUnit * selHashrate * selPeriod : totalHash / 1000000;
           updateProfitDataTable(data, currentProfitData);
         });
-        $('.profit_hashrate').keyup(function (e) {
-          var selHashrate = $('.profit_hashrate').val() > 0 ? $('.profit_hashrate').val() : 0, selUnit = $('.profit_unit').val(), selPeriod = $('.profit_period').val();
+        $('.profit_hashrate').change(function (e) {
+          selHashrate = $('.profit_hashrate').val() > 0 ? $('.profit_hashrate').val() : 0;
+          selUnit = $('.profit_unit').val();
+          selPeriod = $('.profit_period').val();
           currentProfitData.hash = selHashrate > 0 ? selUnit * selHashrate * selPeriod : totalHash / 1000000;
           updateProfitDataTable(data, currentProfitData);
         });
-        var algoButtons = $('.profit_algo_scrypt,.profit_algo_sha256').click(function (e) {
-            var selHashrate = $('.profit_hashrate').val() > 0 ? $('.profit_hashrate').val() : 0, selUnit = $('.profit_unit').val(), selPeriod = $('.profit_period').val(), $this = $(this), el = algoButtons.not(this), selAlgo = $this.attr('class').match(/scrypt/i) ? 'scrypt' : 'sha256';
-            $this.addClass('active');
-            $('.profit_algo').data('profit-algo', selAlgo);
-            el.removeClass('active');
-            currentProfitData.hash = selHashrate > 0 ? selUnit * selHashrate * selPeriod : totalHash / 1000000;
-            updateProfitDataTable(data, currentProfitData);
-          });
         $('.profit-table-details-error').html('');
       } else {
         $('.profit-table-details-error').html('<div class="alert alert-warning"><i class="fa fa-warning"></i><strong>No coins</strong> data available, please wait and try to refresh.</div>');
@@ -53574,6 +53661,7 @@ function getStats(refresh) {
     // End if error/notrunning
     $('.overlay').hide();
     $('.loading-img').hide();
+    $('.refresh-icon').removeClass('fa-spin');
   });
   // End get live stats
   /* Morris.js Charts */
@@ -53666,7 +53754,7 @@ function getStats(refresh) {
           'height': '100%',
           'overflow': 'visible',
           'margin-top': '10px'
-        }).html('<div class="alert alert-warning"><i class="fa fa-warning"></i><b>Ops!</b> <small>No data collected, You need at least 5 minutes of data to see the chart.</small></div>');
+        }).html('<div class="alert alert-warning"><i class="fa fa-warning"></i><b>Oops!</b> <small>No data collected, You need at least 5 minutes of data to see the chart.</small></div>');
       }  //$('.overlay').hide();
          //$('.loading-img').hide();
     });  //End get stored stats
